@@ -699,7 +699,7 @@ deleteProjectButton.addEventListener('click', async () => {
   angles.splice(0, angles.length, { id: 1, name: selectedJointName(), joint: jointSelect.value, selectionStart: null, selectionEnd: null, samples: new Map() }); activeAngleId = 1;
   restoredVideoMetadata = null; currentVideoMetadata = null;
   projectName.value = 'Analyse sans titre'; updateSelectionLabel(); updateResults(); drawOverlay(); renderAngles();
-  saveStatus.textContent = 'Données locales effacées';
+  saveStatus.textContent = 'Données effacées';
 });
 
 function drawAnnotatedAngle(exportContext, angle, frame, hueIndex, combined) {
