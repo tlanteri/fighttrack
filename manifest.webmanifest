@@ -1,0 +1,19 @@
+{
+  "name": "FightTrack",
+  "short_name": "FightTrack",
+  "description": "Station de pointage vidéo pour l’analyse biomécanique.",
+  "lang": "fr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#020b16",
+  "theme_color": "#0b1f33",
+  "icons": [
+    {
+      "src": "assets/images/Mini-logo_Fight%20Track.png",
+      "sizes": "613x613",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
