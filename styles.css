@@ -56,8 +56,60 @@ footer { max-width: 1440px; margin: auto; border-top: 1px solid rgba(16,40,61,.1
 .angle-overlay { position: absolute; top: 16px; right: 16px; padding: 7px 9px; color: #8ea4b8; background: rgba(2, 13, 26, .88); border: 1px solid #12618a; font: 10px 'DM Mono', monospace; }.angle-overlay span { margin-left: 5px; color: #10c8f4; }
 .selection-toolbar { display: flex; align-items: center; gap: 8px; padding: 10px 16px 13px; border-top: 1px solid #16324e; background: #041426; }.selection-label { flex: 1; min-width: 0; color: #8ea4b8; font: 10px 'DM Mono', monospace; }.selection-button { padding: 7px 10px; color: #10c8f4; border: 1px solid #12618a; background: transparent; font: 10px 'DM Mono', monospace; }.selection-button:hover:not(:disabled) { background: #092c45; }.selection-button:disabled { opacity: .35; cursor: not-allowed; }.review-button { color: #001522; background: #10c8f4; border-color: #10c8f4; }.review-button:hover:not(:disabled) { background: #70e2ff; }
 .final-export { margin-top: 0; padding: 15px 16px 16px; border-top: 1px solid #16324e; background: #031120; }.export-section-title { margin: 0 0 9px; color: #8ea4b8; font: 9px 'DM Mono', monospace; letter-spacing: .08em; text-transform: uppercase; }.export-button-row { display: flex; flex-wrap: wrap; gap: 8px; }.final-export #exportProgress { display: block; min-height: 13px; margin-top: 8px; color: #8ea4b8; font: 9px 'DM Mono', monospace; }.data-export-block { margin-top: 12px; padding: 13px; border: 1px solid #16324e; background: #041426; }.data-action { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 11px; color: #10c8f4; border: 1px solid #12618a; background: transparent; font: 10px 'DM Mono', monospace; cursor: pointer; }.data-action:hover:not(:disabled) { background: #092c45; }.data-action.primary { color: #001522; border-color: #10c8f4; background: #10c8f4; }.data-action.primary:hover:not(:disabled) { background: #70e2ff; }.data-action.danger { margin-left: auto; color: #ee806c; border-color: #78443f; }.data-action:disabled { opacity: .35; cursor: not-allowed; }.save-status { display: block; margin-top: 10px; color: var(--lime); font: 9px 'DM Mono', monospace; }
-@media (max-width: 850px) { .app-shell { padding: 0 20px; }.topbar { height: 72px; left: 20px; right: 20px; margin: 0; padding: 0; }.privacy-note { display: none; }.intro-row { display: block; min-height: 572px; margin: 0 -20px; padding: 125px 20px 45px; background-position: 65% center; }.intro-row:after { right: 20px; bottom: 22px; font-size: 34px; }.intro-copy { width: auto; max-width: 340px; margin-top: 25px; }.workspace { grid-template-columns: 1fr; padding-top: 35px; }.control-panel { order: 2; }.analysis-area { order: 1; }.video-stage { min-height: 200px; }.charts-grid { grid-template-columns: 1fr; }.metrics-header { margin-top: 32px; align-items: end; }.metric-pills { display: none; } footer { display: block; } footer span { display: block; margin-top: 5px; } }
-@media (max-width: 850px) { .topbar-actions .button { padding: 10px; font-size: 0; }.topbar-actions .icon { font-size: 20px; }.brand-subtitle { display: none; } h1 { font-size: 39px; }.video-toolbar { padding: 0 10px; }.video-meta { display: none; }.transport { gap: 7px; padding-left: 9px; padding-right: 9px; } }
+@media (max-width: 850px) {
+  .app-shell { padding: 0 20px; }
+  .topbar { height: 72px; left: 20px; right: 20px; margin: 0; padding: 0; }
+  .privacy-note { display: none; }
+  .intro-row { display: block; min-height: 572px; margin: 0 -20px; padding: 125px 20px 45px; background-position: 65% center; }
+  .intro-row:after { right: 20px; bottom: 22px; font-size: 34px; }
+  .intro-copy { width: auto; max-width: 340px; margin-top: 25px; }
+  .workspace { grid-template-columns: 1fr; gap: 14px; padding-top: 24px; }
+  .control-panel { order: 0; padding: 15px 14px; }
+  .analysis-area { order: 1; }
+  .control-panel .panel-heading { margin-bottom: 13px; }
+  .control-panel .panel-heading h2 { font-size: 14px; }
+  .control-panel .field-group { margin-bottom: 11px; }
+  .control-panel .field-group label { margin-bottom: 5px; font-size: 9px; }
+  .control-panel .field-group input,
+  .control-panel .field-group select { min-height: 42px; padding: 8px 10px; font-size: 11px; }
+  .control-panel .divider { margin: 14px 0 13px; }
+  .control-panel .helper { margin-bottom: 9px; font-size: 10px; }
+  .control-panel .landmark-list { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+  .control-panel .landmark { min-width: 0; min-height: 82px; padding: 8px 4px; align-items: center; flex-direction: column; justify-content: flex-start; gap: 5px; text-align: center; }
+  .control-panel .landmark > span:not(.landmark-number) { min-width: 0; width: 100%; }
+  .control-panel .landmark-number { flex: 0 0 23px; width: 23px; height: 23px; font-size: 10px; }
+  .control-panel .landmark strong { min-height: 24px; font-size: 9px; line-height: 1.25; }
+  .control-panel .landmark small { overflow: hidden; font-size: 8px; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+  .control-panel .landmark kbd { display: none; }
+  .control-panel .panel-footnote { margin-top: 12px; padding-top: 10px; font-size: 9px; }
+  .control-panel .interpolation-note { margin-top: 6px; padding-top: 6px; font-size: 8px; }
+  .video-stage { min-height: 200px; }
+  .charts-grid { grid-template-columns: 1fr; }
+  .metrics-header { margin-top: 32px; align-items: end; }
+  .metric-pills { display: none; }
+  footer { display: block; }
+  footer span { display: block; margin-top: 5px; }
+}
+@media (max-width: 850px) {
+  .brand-lockup { flex: 1 1 auto; min-width: 0; gap: 8px; }
+  .lamhess-logo { width: 112px; max-height: 43px; }
+  .uca-logo { width: 132px; max-height: 50px; }
+  .brand-divider { flex: 0 0 1px; height: 28px; }
+  .topbar-actions { flex: 0 0 auto; gap: 0; margin-left: 8px; }
+  .fighttrack-logo { display: none; }
+  .topbar-actions .button { width: 42px; height: 42px; padding: 0; justify-content: center; font-size: 0; }
+  .topbar-actions .icon { font-size: 20px; }
+  .brand-subtitle { display: none; }
+  h1 { font-size: 39px; }
+  .video-toolbar { padding: 0 10px; }
+  .video-meta { display: none; }
+  .transport { gap: 7px; padding-left: 9px; padding-right: 9px; }
+}
+@media (max-width: 390px) {
+  .lamhess-logo { width: 92px; }
+  .uca-logo { width: 108px; }
+  .topbar-actions { margin-left: 6px; }
+}
 @media (max-width: 850px) {
   .video-card { display: flex; flex-direction: column; }
   .angles-panel { order: -1; border-top: 0; border-bottom: 1px solid #16324e; }
