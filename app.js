@@ -6,6 +6,7 @@ const context = canvas.getContext('2d');
 const markerLayer = document.querySelector('#markerLayer');
 const emptyState = document.querySelector('#emptyState');
 const timeline = document.querySelector('#timeline');
+const timelineAngleSegments = document.querySelector('#timelineAngleSegments');
 const playButton = document.querySelector('#playButton');
 const currentTimeLabel = document.querySelector('#currentTime');
 const durationLabel = document.querySelector('#duration');
@@ -22,6 +23,8 @@ const setStartButton = document.querySelector('#setStartButton');
 const setEndButton = document.querySelector('#setEndButton');
 const reviewButton = document.querySelector('#reviewButton');
 const selectionLabel = document.querySelector('#selectionLabel');
+const undoButton = document.querySelector('#undoButton');
+const selectionOverlay = document.querySelector('#selectionOverlay');
 const angleOverlay = document.querySelector('#angleOverlay');
 const addAngleButton = document.querySelector('#addAngleButton');
 const anglesList = document.querySelector('#anglesList');
@@ -39,16 +42,17 @@ let objectUrl = null;
 let activeLandmark = 'joint';
 let fps = 120;
 let speedIndex = 0;
-let selectionStart = null;
-let selectionEnd = null;
 let currentVideoMetadata = null;
 let restoredVideoMetadata = null;
 let saveTimer = null;
 let isRestoring = false;
 let isExporting = false;
+const undoStack = [];
+const redoStack = [];
+const historyLimit = 60;
 const speeds = [1, 0.5, 0.25, 2];
 const jointSelect = document.querySelector('#jointSelect');
-const angles = [{ id: 1, name: jointSelect.value, joint: jointSelect.value, samples: new Map() }];
+const angles = [{ id: 1, name: jointSelect.value, joint: jointSelect.value, selectionStart: null, selectionEnd: null, samples: new Map() }];
 let activeAngleId = 1;
 
 function selectedJointName() { return jointSelect.value === 'Personnalisée' ? 'Articulation personnalisée' : jointSelect.value; }
@@ -61,7 +65,46 @@ function nextAngleName() {
 function activeAngle() { return angles.find((angle) => angle.id === activeAngleId) || angles[0]; }
 function activeSamples() { return activeAngle().samples; }
 
+function editingSnapshot() {
+  return {
+    activeAngleId,
+    joint: jointSelect.value,
+    angles: angles.map((angle) => ({ ...angle, samples: new Map(structuredClone([...angle.samples.entries()])) })),
+  };
+}
+
+function updateUndoButton() { undoButton.disabled = undoStack.length === 0; }
+function rememberForUndo() {
+  undoStack.push(editingSnapshot());
+  if (undoStack.length > historyLimit) undoStack.shift();
+  redoStack.length = 0;
+  updateUndoButton();
+}
+
+function restoreEditingSnapshot(snapshot) {
+  angles.splice(0, angles.length, ...snapshot.angles.map((angle) => ({ ...angle, samples: new Map(angle.samples) })));
+  activeAngleId = angles.some((angle) => angle.id === snapshot.activeAngleId) ? snapshot.activeAngleId : angles[0].id;
+  jointSelect.value = activeAngle().joint || snapshot.joint;
+  updateLandmarkLabels(); updateSelectionLabel(); updateResults(); drawOverlay(); scheduleAutosave();
+}
+
+function undoEditing() {
+  if (!undoStack.length) return;
+  redoStack.push(editingSnapshot());
+  restoreEditingSnapshot(undoStack.pop());
+  updateUndoButton();
+}
+
+function redoEditing() {
+  if (!redoStack.length) return;
+  undoStack.push(editingSnapshot());
+  restoreEditingSnapshot(redoStack.pop());
+  updateUndoButton();
+}
+
 const colors = { proximal: '#00a9b7', joint: '#ee6c54', distal: '#b2c93c' };
+const angleColors = ['#10c8f4', '#ee6c54', '#b2c93c', '#b889ff', '#ffca55', '#46df9b'];
+function angleColor(angle) { return angleColors[Math.max(0, angles.findIndex((item) => item.id === angle.id)) % angleColors.length]; }
 const landmarkNames = { proximal: 'Hanche droite', joint: 'Genou droit', distal: 'Cheville droite' };
 const jointLandmarks = {
   'Épaule droite': ['Hanche droite', 'Épaule droite', 'Coude droit'],
@@ -302,9 +345,8 @@ function calculateMeasures(angle = activeAngle()) {
     const displacementX = origin && sample.joint ? (sample.joint.x - origin.x) * video.videoWidth : null;
     const displacementY = origin && sample.joint ? (origin.y - sample.joint.y) * video.videoHeight : null;
     const displacement = displacementX === null || displacementY === null ? null : Math.hypot(displacementX, displacementY);
-    let angle = null;
-    angle = calculateAngle(sample);
-    return { frame, time: frameTime(frame), displacementX, displacementY, displacement, angle };
+    const angleValueForFrame = calculateAngle(sample);
+    return { frame, time: frameTime(frame), displacementX, displacementY, displacement, angle: angleValueForFrame };
   });
 }
 
@@ -351,8 +393,8 @@ function projectSnapshot() {
   return {
     format: 'fighttrack-project', version: 1, savedAt: new Date().toISOString(),
     projectName: projectName.value.trim() || 'Analyse sans titre', joint: jointSelect.value,
-    fps, selectionStart, selectionEnd, activeAngleId, video: currentVideoMetadata || restoredVideoMetadata,
-    angles: angles.map((angle) => ({ id: angle.id, name: angle.name, joint: angle.joint, samples: [...angle.samples.entries()] })),
+    fps, activeAngleId, video: currentVideoMetadata || restoredVideoMetadata,
+    angles: angles.map((angle) => ({ id: angle.id, name: angle.name, joint: angle.joint, selectionStart: angle.selectionStart, selectionEnd: angle.selectionEnd, samples: [...angle.samples.entries()] })),
   };
 }
 
@@ -393,12 +435,13 @@ function applyProject(data) {
   isRestoring = true;
   projectName.value = data.projectName || 'Analyse sans titre';
   if ([...jointSelect.options].some((option) => option.value === data.joint)) jointSelect.value = data.joint;
-  fps = Number(data.fps) || 120; selectionStart = data.selectionStart ?? null; selectionEnd = data.selectionEnd ?? null;
+  fps = Number(data.fps) || 120;
   angles.splice(0, angles.length, ...data.angles.map((angle, index) => ({
     id: Number(angle.id) || index + 1, name: angle.name || `Angle ${index + 1}`, joint: angle.joint || angle.name?.replace(/ \(\d+\)$/, '') || data.joint,
+    selectionStart: angle.selectionStart ?? data.selectionStart ?? null, selectionEnd: angle.selectionEnd ?? data.selectionEnd ?? null,
     samples: new Map((angle.samples || []).map(([frame, sample]) => [Number(frame), sample])),
   })));
-  if (!angles.length) angles.push({ id: 1, name: selectedJointName(), joint: jointSelect.value, samples: new Map() });
+  if (!angles.length) angles.push({ id: 1, name: selectedJointName(), joint: jointSelect.value, selectionStart: null, selectionEnd: null, samples: new Map() });
   activeAngleId = angles.some((angle) => angle.id === data.activeAngleId) ? data.activeAngleId : angles[0].id;
   restoredVideoMetadata = data.video || null;
   videoFps.textContent = `${formatFps(fps)} fps`;
@@ -421,12 +464,55 @@ function renderAngles() {
   anglesList.innerHTML = '';
   angles.forEach((angle) => {
     const card = document.createElement('div'); card.className = `angle-card${angle.id === activeAngleId ? ' active' : ''}`;
+    card.style.setProperty('--angle-color', angleColor(angle));
+    const color = document.createElement('i'); color.className = 'angle-color'; color.title = `Couleur de ${angle.name}`;
     const select = document.createElement('button'); select.className = 'angle-select'; select.type = 'button'; select.textContent = angle.id === activeAngleId ? '●' : '○'; select.title = 'Afficher cet angle sur la vidéo';
-    select.addEventListener('click', () => { activeAngleId = angle.id; if (angle.joint && [...jointSelect.options].some((option) => option.value === angle.joint)) { jointSelect.value = angle.joint; updateLandmarkLabels(); } renderAngles(); updateResults(); drawOverlay(); scheduleAutosave(); });
+    select.addEventListener('click', () => { activeAngleId = angle.id; if (angle.joint && [...jointSelect.options].some((option) => option.value === angle.joint)) { jointSelect.value = angle.joint; updateLandmarkLabels(); } updateSelectionLabel(); renderAngles(); updateResults(); drawOverlay(); scheduleAutosave(); });
     const input = document.createElement('input'); input.className = 'angle-name'; input.value = angle.name; input.setAttribute('aria-label', `Nom de ${angle.name}`);
-    input.addEventListener('change', () => { angle.name = input.value.trim() || selectedJointName(); renderAngles(); scheduleAutosave(); });
-    const info = document.createElement('span'); info.className = 'angle-info'; info.textContent = `${angle.samples.size} frame${angle.samples.size > 1 ? 's' : ''} clé${angle.samples.size > 1 ? 's' : ''}`;
-    card.append(select, input, info); anglesList.append(card);
+    input.addEventListener('change', () => {
+      const newName = input.value.trim() || selectedJointName();
+      if (newName === angle.name) return;
+      rememberForUndo(); angle.name = newName; input.value = newName;
+      input.setAttribute('aria-label', `Nom de ${newName}`);
+      renderTimelineAngleSegments(); scheduleAutosave();
+    });
+    const landmarkCount = [...angle.samples.values()].reduce((total, sample) => total + ['proximal', 'joint', 'distal'].filter((name) => sample[name]).length, 0);
+    const sequenceCount = angle.selectionStart !== null && angle.selectionEnd !== null ? angle.selectionEnd - angle.selectionStart + 1 : 0;
+    const info = document.createElement('span'); info.className = 'angle-info'; info.textContent = `${angle.samples.size} clé${angle.samples.size > 1 ? 's' : ''} · ${landmarkCount} repère${landmarkCount > 1 ? 's' : ''}${sequenceCount ? ` · ${sequenceCount} images` : ''}`;
+    const remove = document.createElement('button'); remove.className = 'angle-delete'; remove.type = 'button'; remove.textContent = '×'; remove.disabled = angles.length === 1; remove.title = angles.length === 1 ? 'Le projet doit conserver au moins un angle' : `Supprimer ${angle.name}`;
+    remove.addEventListener('click', () => {
+      if (angles.length === 1 || !window.confirm(`Supprimer l’angle « ${angle.name} » et tous ses pointages ?`)) return;
+      rememberForUndo();
+      const index = angles.findIndex((item) => item.id === angle.id);
+      angles.splice(index, 1);
+      if (activeAngleId === angle.id) activeAngleId = angles[Math.min(index, angles.length - 1)].id;
+      jointSelect.value = activeAngle().joint || jointSelect.value;
+      card.remove();
+      updateLandmarkLabels(); updateSelectionLabel(); updateResults(); drawOverlay(); scheduleAutosave();
+    });
+    card.append(color, select, input, info, remove); anglesList.append(card);
+  });
+}
+
+function renderTimelineAngleSegments() {
+  timelineAngleSegments.innerHTML = '';
+  if (!video.duration || !Number.isFinite(video.duration)) return;
+  const totalFrames = Math.max(1, Math.floor(video.duration * fps));
+  const addSelectionMarker = (angle, frame, type) => {
+    if (frame === null) return;
+    const marker = document.createElement('button');
+    marker.type = 'button'; marker.className = `timeline-selection-marker ${type}${angle.id === activeAngleId ? ' active-angle' : ''}`;
+    marker.style.setProperty('--angle-color', angleColor(angle));
+    marker.style.left = `${Math.min(100, frame / totalFrames * 100)}%`;
+    marker.textContent = '';
+    marker.title = `${angle.name} · ${type === 'start' ? 'début' : 'fin'} · image ${frame} · ${formatTime(frameTime(frame))}`;
+    marker.setAttribute('aria-label', marker.title);
+    marker.addEventListener('click', () => { activeAngleId = angle.id; if (angle.joint) jointSelect.value = angle.joint; updateLandmarkLabels(); updateSelectionLabel(); seekToFrame(frame); updateResults(); });
+    timelineAngleSegments.append(marker);
+  };
+  angles.forEach((angle) => {
+    addSelectionMarker(angle, angle.selectionStart ?? null, 'start');
+    addSelectionMarker(angle, angle.selectionEnd ?? null, 'end');
   });
 }
 
@@ -439,11 +525,13 @@ function updateResults() {
   angleValue.textContent = latest?.angle === null || latest?.angle === undefined ? '-- °' : `${latest.angle.toFixed(1)} °`;
   document.querySelector('#metricsResults').style.display = 'flex';
   document.querySelector('#metricsCharts').style.display = 'grid';
-  exportButton.disabled = measures.length === 0 || !video.videoWidth;
-  const hasVideoMeasures = Boolean(video.videoWidth && angles.some((item) => item.samples.size));
+  const hasAnySamples = angles.some((item) => item.samples.size > 0);
+  exportButton.disabled = !hasAnySamples;
+  const hasVideoMeasures = Boolean(video.videoWidth && hasAnySamples);
   exportActiveVideoButton.disabled = !hasVideoMeasures || isExporting;
   exportAllVideosButton.disabled = !hasVideoMeasures || isExporting;
   renderAngles();
+  renderTimelineAngleSegments();
 }
 
 function updateTransport() {
@@ -451,9 +539,10 @@ function updateTransport() {
   currentTimeLabel.textContent = formatTime(video.currentTime);
   durationLabel.textContent = formatTime(video.duration);
   frameBadge.textContent = frameNumber().toString().padStart(4, '0');
-  if (!isExporting && !video.paused && selectionEnd !== null && frameNumber() >= selectionEnd) {
+  const angle = activeAngle();
+  if (!isExporting && !video.paused && angle.selectionEnd !== null && frameNumber() >= angle.selectionEnd) {
     video.pause();
-    seekToFrame(selectionStart ?? selectionEnd);
+    seekToFrame(angle.selectionStart ?? angle.selectionEnd);
   }
   drawOverlay();
 }
@@ -480,11 +569,9 @@ function loadVideoFile(file) {
   frameControls.forEach((control) => { control.disabled = false; });
   setStartButton.disabled = false; setEndButton.disabled = false;
   if (!sameVideo) {
-    selectionStart = null; selectionEnd = null; selectionLabel.textContent = 'Aucune séquence sélectionnée'; reviewButton.disabled = true;
-    angles.forEach((angle) => angle.samples.clear());
+    angles.forEach((angle) => { angle.selectionStart = null; angle.selectionEnd = null; angle.samples.clear(); }); updateSelectionLabel();
   } else updateSelectionLabel();
   updateResults();
-  addAngleButton.disabled = false;
   detectFrameRate(file);
   scheduleAutosave();
 }
@@ -500,7 +587,7 @@ stage.addEventListener('drop', (event) => {
 video.addEventListener('loadedmetadata', () => {
   stage.classList.add('loaded'); emptyState.hidden = true;
   document.querySelector('#videoResolution').textContent = `${video.videoWidth} × ${video.videoHeight}`;
-  requestAnimationFrame(() => { resizeCanvas(); updateTransport(); });
+  requestAnimationFrame(() => { resizeCanvas(); updateTransport(); renderTimelineAngleSegments(); });
 });
 new ResizeObserver(resizeCanvas).observe(stage);
 video.addEventListener('timeupdate', updateTransport);
@@ -515,15 +602,39 @@ document.querySelector('#nextFrame').addEventListener('click', () => { video.pau
 video.addEventListener('seeked', updateTransport);
 document.querySelector('#speedButton').addEventListener('click', (event) => { speedIndex = (speedIndex + 1) % speeds.length; video.playbackRate = speeds[speedIndex]; event.currentTarget.textContent = `${speeds[speedIndex]}×`; });
 function updateSelectionLabel() {
-  if (selectionStart === null || selectionEnd === null) { selectionLabel.textContent = selectionStart === null ? 'Aucune séquence sélectionnée' : `Début : ${formatTime(frameTime(selectionStart))} · choisissez une fin`; reviewButton.disabled = true; return; }
-  selectionLabel.textContent = `Séquence : ${formatTime(frameTime(selectionStart))} → ${formatTime(frameTime(selectionEnd))}`;
+  const angle = activeAngle(); const selectionStart = angle.selectionStart ?? null; const selectionEnd = angle.selectionEnd ?? null;
+  if (selectionStart === null || selectionEnd === null) {
+    selectionLabel.textContent = selectionStart === null ? 'Aucune séquence sélectionnée' : `Début : image ${selectionStart} · ${formatTime(frameTime(selectionStart))} · choisissez une fin`;
+    selectionOverlay.hidden = selectionStart === null;
+    selectionOverlay.textContent = selectionStart === null ? '' : `DÉBUT · IMAGE ${selectionStart}`;
+    renderTimelineAngleSegments();
+    reviewButton.disabled = true; return;
+  }
+  const frameCount = selectionEnd - selectionStart + 1;
+  selectionLabel.textContent = `Images ${selectionStart} → ${selectionEnd} · ${frameCount} images · ${formatTime(frameTime(selectionStart))} → ${formatTime(frameTime(selectionEnd))}`;
+  selectionOverlay.hidden = false;
+  selectionOverlay.innerHTML = `DÉBUT <strong>${selectionStart}</strong><span>${frameCount} IMAGES</span>FIN <strong>${selectionEnd}</strong>`;
+  renderTimelineAngleSegments();
   reviewButton.disabled = false;
 }
-setStartButton.addEventListener('click', () => { selectionStart = frameNumber(); if (selectionEnd !== null && selectionEnd <= selectionStart) selectionEnd = null; updateSelectionLabel(); scheduleAutosave(); });
-setEndButton.addEventListener('click', () => { const current = frameNumber(); if (selectionStart === null) selectionStart = 0; selectionEnd = Math.max(selectionStart + 1, current); updateSelectionLabel(); scheduleAutosave(); });
-reviewButton.addEventListener('click', () => { if (selectionStart === null || selectionEnd === null) return; seekToFrame(selectionStart); video.play(); });
-addAngleButton.addEventListener('click', () => { const id = Math.max(...angles.map((angle) => angle.id)) + 1; angles.push({ id, name: nextAngleName(), joint: jointSelect.value, samples: new Map() }); activeAngleId = id; renderAngles(); updateResults(); scheduleAutosave(); });
-jointSelect.addEventListener('change', () => { updateLandmarkLabels(); const angle = activeAngle(); if (angle.samples.size === 0) { angle.joint = jointSelect.value; angle.name = nextAngleName(); } updateResults(); drawOverlay(); scheduleAutosave(); });
+undoButton.addEventListener('click', undoEditing);
+setStartButton.addEventListener('click', () => { rememberForUndo(); const angle = activeAngle(); angle.selectionStart = frameNumber(); if (angle.selectionEnd !== null && angle.selectionEnd <= angle.selectionStart) angle.selectionEnd = null; updateSelectionLabel(); scheduleAutosave(); });
+setEndButton.addEventListener('click', () => { rememberForUndo(); const angle = activeAngle(); const current = frameNumber(); if (angle.selectionStart === null) angle.selectionStart = 0; angle.selectionEnd = Math.max(angle.selectionStart + 1, current); updateSelectionLabel(); scheduleAutosave(); });
+reviewButton.addEventListener('click', () => { const angle = activeAngle(); if (angle.selectionStart === null || angle.selectionEnd === null) return; seekToFrame(angle.selectionStart); video.play(); });
+addAngleButton.addEventListener('click', () => {
+  rememberForUndo();
+  const id = Math.max(0, ...angles.map((angle) => angle.id)) + 1;
+  const name = nextAngleName();
+  angles.push({ id, name, joint: jointSelect.value, selectionStart: null, selectionEnd: null, samples: new Map() });
+  activeAngleId = id;
+  updateLandmarkLabels();
+  updateSelectionLabel();
+  updateResults();
+  drawOverlay();
+  pointingStatus.textContent = `${name} ajouté · pointez maintenant l’articulation ciblée.`;
+  scheduleAutosave();
+});
+jointSelect.addEventListener('change', () => { const angle = activeAngle(); if (angle.samples.size === 0) rememberForUndo(); updateLandmarkLabels(); if (angle.samples.size === 0) { angle.joint = jointSelect.value; angle.name = nextAngleName(); } updateResults(); drawOverlay(); scheduleAutosave(); });
 projectName.addEventListener('input', scheduleAutosave);
 document.querySelectorAll('.landmark').forEach((button) => button.addEventListener('click', () => {
   activeLandmark = button.dataset.landmark;
@@ -531,7 +642,17 @@ document.querySelectorAll('.landmark').forEach((button) => button.addEventListen
   pointingStatus.textContent = `Prêt à pointer ${landmarkNames[activeLandmark].toLowerCase()} sur l’image actuelle.`;
   drawOverlay();
 }));
-window.addEventListener('keydown', (event) => { if (event.target.matches('input, select')) return; const selected = { '1': 'proximal', '2': 'joint', '3': 'distal' }[event.key]; if (selected) document.querySelector(`[data-landmark="${selected}"]`).click(); if (event.code === 'Space') { event.preventDefault(); playButton.click(); } if (event.key === 'ArrowLeft') seekToFrame(frameNumber() - 1); if (event.key === 'ArrowRight') seekToFrame(frameNumber() + 1); });
+window.addEventListener('keydown', (event) => {
+  const modifier = event.ctrlKey || event.metaKey;
+  if (modifier && event.key.toLowerCase() === 'z' && !event.target.matches('input, textarea')) { event.preventDefault(); event.shiftKey ? redoEditing() : undoEditing(); return; }
+  if (modifier && event.key.toLowerCase() === 'y' && !event.target.matches('input, textarea')) { event.preventDefault(); redoEditing(); return; }
+  if (event.target.matches('input, select')) return;
+  const selected = { '1': 'proximal', '2': 'joint', '3': 'distal' }[event.key];
+  if (selected) document.querySelector(`[data-landmark="${selected}"]`).click();
+  if (event.code === 'Space') { event.preventDefault(); playButton.click(); }
+  if (event.key === 'ArrowLeft') seekToFrame(frameNumber() - 1);
+  if (event.key === 'ArrowRight') seekToFrame(frameNumber() + 1);
+});
 canvas.addEventListener('pointerdown', (event) => {
   event.preventDefault();
   if (!video.videoWidth) return;
@@ -543,23 +664,56 @@ canvas.addEventListener('pointerdown', (event) => {
   if (x < 0 || x > 1 || y < 0 || y > 1) return;
   const frame = frameNumber();
   const sample = activeSamples().get(frame) || {};
+  rememberForUndo();
   sample[activeLandmark] = { x, y };
   sample._source ||= {}; sample._source[activeLandmark] = 'manual';
   activeSamples().set(frame, sample);
   pointingStatus.textContent = `Frame clé enregistrée : ${landmarkNames[activeLandmark]} à l’image ${frame.toString().padStart(4, '0')}.`;
+  renderAngles();
   drawOverlay();
   requestAnimationFrame(drawOverlay);
   updateResults(); scheduleAutosave();
 });
 function csvValue(value, digits = 2) { return value === null || value === undefined ? '' : value.toFixed(digits).replace('.', ','); }
 
-exportButton.addEventListener('click', () => {
+function createCsvExport() {
   const lines = ['projet;angle;frame;temps_s;deplacement_x_px;deplacement_y_px;deplacement_total_px;angle_deg'];
   angles.forEach((angle) => calculateMeasures(angle).forEach((row) => lines.push([
     projectName.value.trim(), angle.name, row.frame, row.time.toFixed(6).replace('.', ','),
     csvValue(row.displacementX), csvValue(row.displacementY), csvValue(row.displacement), csvValue(row.angle),
   ].map((value) => `"${String(value).replace(/"/g, '""')}"`).join(';'))));
-  downloadBlob(new Blob([`\ufeff${lines.join('\n')}`], { type: 'text/csv;charset=utf-8' }), `${safeFileName(projectName.value)}-mesures.csv`);
+  return {
+    blob: new Blob([`\ufeff${lines.join('\n')}`], { type: 'text/csv;charset=utf-8' }),
+    name: `${safeFileName(projectName.value)}-mesures.csv`,
+  };
+}
+
+exportButton.addEventListener('click', async () => {
+  try {
+    const file = createCsvExport();
+    if (window.showSaveFilePicker) {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: file.name,
+        types: [{ description: 'Fichier CSV', accept: { 'text/csv': ['.csv'] } }],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(file.blob);
+      await writable.close();
+      saveStatus.textContent = `CSV enregistré · ${file.name}`;
+    } else {
+      downloadBlob(file.blob, file.name);
+      saveStatus.textContent = `Téléchargement CSV lancé · ${file.name}`;
+    }
+  } catch (error) {
+    if (error.name === 'AbortError') { saveStatus.textContent = 'Export CSV annulé'; return; }
+    try {
+      const file = createCsvExport();
+      downloadBlob(file.blob, file.name);
+      saveStatus.textContent = `Téléchargement CSV lancé · ${file.name}`;
+    } catch (fallbackError) {
+      saveStatus.textContent = `Échec de l’export CSV · ${fallbackError.message}`;
+    }
+  }
 });
 
 exportProjectButton.addEventListener('click', () => {
@@ -584,8 +738,8 @@ deleteProjectButton.addEventListener('click', async () => {
     });
     database.close();
   } catch (error) { /* L’état en mémoire est tout de même réinitialisé. */ }
-  angles.splice(0, angles.length, { id: 1, name: selectedJointName(), joint: jointSelect.value, samples: new Map() }); activeAngleId = 1;
-  selectionStart = null; selectionEnd = null; restoredVideoMetadata = null; currentVideoMetadata = null;
+  angles.splice(0, angles.length, { id: 1, name: selectedJointName(), joint: jointSelect.value, selectionStart: null, selectionEnd: null, samples: new Map() }); activeAngleId = 1;
+  restoredVideoMetadata = null; currentVideoMetadata = null;
   projectName.value = 'Analyse sans titre'; updateSelectionLabel(); updateResults(); drawOverlay(); renderAngles();
   saveStatus.textContent = 'Données locales effacées';
 });
@@ -638,7 +792,10 @@ async function recordAnnotatedVideo(includedAngles, outputName, progressPrefix) 
   const recorder = new MediaRecorder(outputStream, { mimeType: format.mime, videoBitsPerSecond: 8_000_000 }); const chunks = [];
   recorder.addEventListener('dataavailable', (event) => { if (event.data.size) chunks.push(event.data); });
   const result = new Promise((resolve, reject) => { recorder.addEventListener('stop', () => resolve(new Blob(chunks, { type: format.mime })), { once: true }); recorder.addEventListener('error', () => reject(recorder.error), { once: true }); });
-  const startFrame = selectionStart ?? 0; const endFrame = selectionEnd ?? Math.max(startFrame + 1, Math.floor(video.duration * fps));
+  const starts = includedAngles.map((angle) => angle.selectionStart).filter((frame) => frame !== null && frame !== undefined);
+  const ends = includedAngles.map((angle) => angle.selectionEnd).filter((frame) => frame !== null && frame !== undefined);
+  const startFrame = starts.length ? Math.min(...starts) : 0;
+  const endFrame = ends.length ? Math.max(...ends) : Math.max(startFrame + 1, Math.floor(video.duration * fps));
   const startTime = frameTime(startFrame); const endTime = Math.min(video.duration, frameTime(endFrame));
   await waitForSeek(startTime); video.playbackRate = 1; recorder.start(1000);
   let stopped = false;
@@ -655,21 +812,47 @@ async function recordAnnotatedVideo(includedAngles, outputName, progressPrefix) 
   await video.play(); paint();
   if (video.currentTime >= endTime) finish();
   const blob = await result; outputStream.getTracks().forEach((track) => track.stop());
-  downloadBlob(blob, `${safeFileName(projectName.value)}-${safeFileName(outputName)}.${format.extension}`);
+  return { blob, name: `${safeFileName(projectName.value)}-${safeFileName(outputName)}.${format.extension}` };
+}
+
+async function writeFileToFolder(folder, file) {
+  const handle = await folder.getFileHandle(file.name, { create: true });
+  const writable = await handle.createWritable();
+  await writable.write(file.blob);
+  await writable.close();
 }
 
 async function runVideoExports(mode) {
   if (isExporting || !video.videoWidth) return;
+  let exportFolder = null;
+  if (mode === 'all' && window.showDirectoryPicker) {
+    try {
+      const parentFolder = await window.showDirectoryPicker({ mode: 'readwrite' });
+      exportFolder = await parentFolder.getDirectoryHandle(`${safeFileName(projectName.value)}-exports`, { create: true });
+    } catch (error) {
+      if (error.name === 'AbortError') { exportProgress.textContent = 'Export annulé'; return; }
+      exportProgress.textContent = 'Dossier inaccessible · téléchargements classiques utilisés.';
+    }
+  }
   isExporting = true; updateResults(); const originalTime = video.currentTime; const originalRate = video.playbackRate;
   try {
     const populated = angles.filter((angle) => angle.samples.size);
-    if (mode === 'active') await recordAnnotatedVideo([activeAngle()], activeAngle().name, `Export ${activeAngle().name}`);
-    else {
-      exportButton.click();
-      await recordAnnotatedVideo(populated, 'tous-les-angles', 'Vidéo avec tous les angles');
-      for (let index = 0; index < populated.length; index += 1) await recordAnnotatedVideo([populated[index]], populated[index].name, `Vidéo ${index + 1}/${populated.length}`);
+    if (mode === 'active') {
+      const file = await recordAnnotatedVideo([activeAngle()], activeAngle().name, `Export ${activeAngle().name}`);
+      downloadBlob(file.blob, file.name);
     }
-    exportProgress.textContent = 'Export vidéo terminé';
+    else {
+      const csv = createCsvExport();
+      const videoFolder = exportFolder ? await exportFolder.getDirectoryHandle('videos', { create: true }) : null;
+      if (exportFolder) await writeFileToFolder(exportFolder, csv); else downloadBlob(csv.blob, csv.name);
+      const combined = await recordAnnotatedVideo(populated, 'tous-les-angles', 'Vidéo avec tous les angles');
+      if (videoFolder) await writeFileToFolder(videoFolder, combined); else downloadBlob(combined.blob, combined.name);
+      for (let index = 0; index < populated.length; index += 1) {
+        const file = await recordAnnotatedVideo([populated[index]], populated[index].name, `Vidéo ${index + 1}/${populated.length}`);
+        if (videoFolder) await writeFileToFolder(videoFolder, file); else downloadBlob(file.blob, file.name);
+      }
+    }
+    exportProgress.textContent = exportFolder ? `Export terminé dans ${exportFolder.name}` : 'Export vidéo terminé';
   } catch (error) { exportProgress.textContent = `Échec de l’export : ${error.message}`; }
   finally { isExporting = false; video.playbackRate = originalRate; await waitForSeek(originalTime); updateResults(); }
 }

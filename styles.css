@@ -62,6 +62,17 @@ footer { max-width: 1440px; margin: auto; border-top: 1px solid rgba(16,40,61,.1
 @media (max-width: 850px) { .topbar-actions .button { padding: 10px; font-size: 0; }.topbar-actions .icon { font-size: 20px; }.brand-subtitle { display: none; } h1 { font-size: 39px; }.video-toolbar { padding: 0 10px; }.video-meta { display: none; }.transport { gap: 7px; padding-left: 9px; padding-right: 9px; } }
 
 /* FightTrack dark research interface palette */
+.angle-card.active { border-color: var(--angle-color); box-shadow: inset 3px 0 var(--angle-color); }
+.angle-color { flex: 0 0 9px; width: 9px; height: 9px; border-radius: 50%; background: var(--angle-color); box-shadow: 0 0 8px var(--angle-color); }
+.angle-delete { display: grid; place-items: center; flex: 0 0 24px; width: 24px; height: 24px; padding: 0; color: #ee806c; border: 1px solid transparent; background: transparent; font-size: 18px; line-height: 1; cursor: pointer; }
+.angle-delete:hover:not(:disabled) { border-color: #78443f; background: rgba(238,108,84,.12); }
+.angle-delete:disabled { opacity: .25; cursor: not-allowed; }
+.timeline-wrap { position: relative; }
+.timeline-angle-segments { position: absolute; z-index: 3; top: 0; right: 7px; left: 7px; height: 16px; overflow: visible; pointer-events: none; }
+.transport .timeline-selection-marker { position: absolute; z-index: 4; top: 50%; width: 10px; height: 18px; padding: 0; border: 0; background: var(--angle-color); clip-path: polygon(0 0, 100% 0, 100% 72%, 50% 100%, 0 72%); opacity: .72; cursor: pointer; pointer-events: auto; transform: translate(-50%, -100%); filter: drop-shadow(0 1px 1px rgba(2,13,26,.95)); transition: width .15s, height .15s, opacity .15s, filter .15s; }
+.timeline-selection-marker.end { filter: brightness(.82) drop-shadow(0 1px 1px rgba(2,13,26,.95)); }
+.timeline-selection-marker.active-angle { z-index: 5; width: 14px; height: 23px; opacity: 1; filter: brightness(1.08) drop-shadow(0 0 4px var(--angle-color)) drop-shadow(0 1px 1px #fff); }
+.timeline-selection-marker:hover { width: 14px; height: 23px; opacity: 1; filter: brightness(1.25) drop-shadow(0 0 5px var(--angle-color)); }
 .video-stage video { z-index: 1; }
 .video-stage canvas { z-index: 2; touch-action: none; }
 .marker-layer { position: absolute; inset: 0; z-index: 3; overflow: hidden; pointer-events: none; }
@@ -70,7 +81,11 @@ footer { max-width: 1440px; margin: auto; border-top: 1px solid rgba(16,40,61,.1
 .video-marker.distal { background: var(--lime); }
 .video-marker.selected { width: 20px; height: 20px; animation: marker-pulse 1s ease-out infinite; }
 @keyframes marker-pulse { 0%, 100% { box-shadow: 0 0 0 3px rgba(0, 0, 0, .65), 0 0 0 0 rgba(255,255,255,.6); } 50% { box-shadow: 0 0 0 3px rgba(0, 0, 0, .65), 0 0 0 8px rgba(255,255,255,0); } }
-.frame-badge, .angle-overlay, .axis-marker { z-index: 4; pointer-events: none; }
+.frame-badge, .angle-overlay, .axis-marker, .selection-overlay { z-index: 4; pointer-events: none; }
+.selection-overlay { position: absolute; left: 50%; bottom: 16px; display: flex; align-items: center; gap: 7px; padding: 7px 10px; color: #8ea4b8; border: 1px solid #12618a; background: rgba(2, 13, 26, .88); font: 9px 'DM Mono', monospace; transform: translateX(-50%); }
+.selection-overlay[hidden] { display: none; }
+.selection-overlay strong { color: #fff; }
+.selection-overlay span { margin: 0 4px; padding: 3px 6px; color: var(--cyan); border-right: 1px solid #12618a; border-left: 1px solid #12618a; }
 .button-primary { color: #001522; background: #10c8f4; box-shadow: 0 0 22px rgba(16, 200, 244, .18); }
 .button-primary:hover { background: #70e2ff; }
 .button-ghost { color: #10c8f4; border-color: #12618a; }

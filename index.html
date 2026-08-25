@@ -103,21 +103,22 @@
               <div class="axis-marker" aria-label="Repère du plan image"><span class="axis-y">Y ↑</span><span class="axis-x">X →</span></div>
               <div class="angle-overlay" id="angleOverlay" hidden>ANGLE <span>--°</span></div>
               <div class="frame-badge" id="frameBadge">FRAME <span>0000</span></div>
+              <div class="selection-overlay" id="selectionOverlay" hidden></div>
             </div>
             <div class="transport">
               <button class="transport-button" id="previousFrame" title="Image précédente" disabled>|‹</button>
               <button class="play-button" id="playButton" title="Lire / mettre en pause" disabled>▶</button>
               <button class="transport-button" id="nextFrame" title="Image suivante" disabled>›|</button>
-              <div class="timeline-wrap"><input id="timeline" type="range" min="0" max="1000" value="0" aria-label="Position dans la vidéo"><div class="timecodes"><span id="currentTime">00:00.000</span><span id="duration">00:00.000</span></div></div>
+              <div class="timeline-wrap"><input id="timeline" type="range" min="0" max="1000" value="0" aria-label="Position dans la vidéo"><div class="timeline-angle-segments" id="timelineAngleSegments" aria-label="Séquences des angles articulaires"></div><div class="timecodes"><span id="currentTime">00:00.000</span><span id="duration">00:00.000</span></div></div>
               <button class="transport-button speed-button" id="speedButton" title="Changer la vitesse">1×</button>
             </div>
-            <div class="selection-toolbar"><span class="selection-label" id="selectionLabel">Aucune séquence sélectionnée</span><button class="selection-button" id="setStartButton" disabled>Début</button><button class="selection-button" id="setEndButton" disabled>Fin</button><button class="selection-button review-button" id="reviewButton" disabled>▶ Revoir la séquence</button></div>
+            <div class="selection-toolbar"><span class="selection-label" id="selectionLabel">Aucune séquence sélectionnée</span><button class="selection-button" id="undoButton" type="button" disabled title="Annuler la dernière modification (Ctrl+Z)">↶ Annuler</button><button class="selection-button" id="setStartButton" disabled>Début</button><button class="selection-button" id="setEndButton" disabled>Fin</button><button class="selection-button review-button" id="reviewButton" disabled>▶ Revoir la séquence</button></div>
             <section class="angles-panel" aria-label="Angles articulaires enregistrés">
-              <div class="angles-heading"><div><span class="section-index">03</span><h2>Angles articulaires</h2></div><button class="add-angle-button" id="addAngleButton" disabled>+ Ajouter un angle</button></div>
+              <div class="angles-heading"><div><span class="section-index">03</span><h2>Angles articulaires</h2></div><button class="add-angle-button" id="addAngleButton" type="button">+ Ajouter un angle</button></div>
               <div class="angles-list" id="anglesList"></div>
               <div class="final-export">
                 <p class="export-section-title">Exports vidéo</p>
-                <div class="export-button-row"><button class="selection-button" id="exportActiveVideoButton" disabled>Vidéo de l’angle actif</button><button class="review-button selection-button" id="exportAllVideosButton" disabled>Exporter toutes les vidéos</button></div>
+                <div class="export-button-row"><button class="selection-button" id="exportActiveVideoButton" disabled>Vidéo de l’angle actif</button><button class="review-button selection-button" id="exportAllVideosButton" disabled>Exporter tout dans un dossier</button></div>
                 <span id="exportProgress" role="status"></span>
                 <div class="data-export-block">
                   <p class="export-section-title">Données et sauvegarde</p>
@@ -147,4 +148,3 @@
   <script src="app.js"></script>
 </body>
 </html>
-
