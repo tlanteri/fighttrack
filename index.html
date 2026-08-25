@@ -20,6 +20,7 @@
         <img class="uca-logo" src="assets/images/UCAlogoQlarge-inverse.png" alt="Université Côte d’Azur">
       </div>
       <div class="topbar-actions">
+        <button class="button button-ghost share-button" id="shareButton" type="button"><span class="icon" aria-hidden="true">▦</span> Obtenir sur téléphone / Partager</button>
         <img class="fighttrack-logo" src="assets/images/Logo_Fight%20Track.png" alt="FightTrack">
       </div>
       <span class="privacy-note"><span class="status-dot"></span> Données locales</span>
@@ -32,7 +33,7 @@
           <h1>Pointer le mouvement.<br><em>Comprendre</em> la trajectoire.</h1>
         </div>
         <div class="intro-copy">
-          <p>Une station de pointage manuelle pour quantifier le déplacement et l’angle articulaire, image par image.</p>
+          <p>Une station de pointage manuel pour relever les positions articulaires, image par image, puis les analyser dans Excel.</p>
           <label class="button button-primary upload-button" for="videoInput"><span class="icon">+</span> Charger une vidéo</label>
           <input id="videoInput" type="file" accept="video/*" hidden>
         </div>
@@ -116,6 +117,7 @@
             <section class="angles-panel" aria-label="Angles articulaires enregistrés">
               <div class="angles-heading"><div><span class="section-index">03</span><h2>Angles articulaires</h2></div><button class="add-angle-button" id="addAngleButton" type="button">+ Ajouter un angle</button></div>
               <div class="angles-list" id="anglesList"></div>
+            </section>
               <div class="final-export">
                 <p class="export-section-title">Exports vidéo</p>
                 <div class="export-button-row"><button class="selection-button" id="exportActiveVideoButton" disabled>Vidéo de l’angle actif</button><button class="review-button selection-button" id="exportAllVideosButton" disabled>Exporter tout dans un dossier</button></div>
@@ -123,7 +125,7 @@
                 <div class="data-export-block">
                   <p class="export-section-title">Données et sauvegarde</p>
                   <div class="export-button-row">
-                    <button class="data-action primary" id="exportButton" disabled title="Exporter toutes les mesures au format CSV"><span>↓</span> Exporter CSV</button>
+                    <button class="data-action primary" id="exportButton" disabled title="Exporter les coordonnées brutes au format CSV"><span>↓</span> Exporter CSV</button>
                     <button class="data-action" id="exportProjectButton" type="button">Exporter le projet</button>
                     <label class="data-action" for="importProjectInput">Importer un projet</label>
                     <input id="importProjectInput" type="file" accept=".json,.fighttrack" hidden>
@@ -132,19 +134,20 @@
                   <small class="save-status" id="saveStatus">Sauvegarde locale prête</small>
                 </div>
               </div>
-            </section>
           </div>
 
-          <div class="metrics-header" id="metricsResults"><div><p class="eyebrow">RÉSULTATS <span>•</span> TEMPS RÉEL</p><h2>Mesures cinématiques</h2></div><div class="metric-pills"><span><i class="swatch cyan"></i>Déplacement</span><span><i class="swatch coral"></i>Angle</span></div></div>
-          <div class="charts-grid" id="metricsCharts">
-            <article class="chart-card"><div class="chart-title"><div><span class="chart-number cyan-text">01</span><h3>Déplacement X / Y</h3></div><span class="unit-label">px</span></div><div class="chart-legend"><span><i class="swatch cyan"></i>X horizontal</span><span><i class="swatch lime"></i>Y vertical</span></div><div class="chart" id="displacementChart"><div class="chart-empty">Les positions pointées apparaîtront ici</div></div><div class="chart-footer"><span>Y positif vers le haut</span><strong id="displacementValue">X -- · Y --</strong></div></article>
-            <article class="chart-card"><div class="chart-title"><div><span class="chart-number coral-text">02</span><h3>Angle articulaire</h3></div><span class="unit-label">degrés</span></div><div class="chart" id="angleChart"><div class="chart-empty">Pointez les 3 repères pour calculer l’angle</div></div><div class="chart-footer"><span>Angle entre les deux segments</span><strong id="angleValue">-- °</strong></div></article>
-          </div>
         </section>
       </section>
     </main>
     <footer><span>FightTrack </span><span>Conçu par T. LANTERI · Université Côte d’Azur</span></footer>
   </div>
+  <dialog class="share-dialog" id="shareDialog" aria-labelledby="shareDialogTitle">
+    <button class="share-dialog-close" id="shareDialogClose" type="button" aria-label="Fermer">×</button>
+    <p class="eyebrow">FIGHTTRACK MOBILE</p>
+    <h2 id="shareDialogTitle">Obtenir sur le téléphone / Partager</h2>
+    <p>Scannez ce QR code avec l’appareil photo de votre téléphone.</p>
+    <img src="assets/images/QR%20Code.png" alt="QR code pour ouvrir FightTrack sur un téléphone">
+  </dialog>
   <script src="app.js"></script>
 </body>
 </html>

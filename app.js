@@ -13,10 +13,6 @@ const durationLabel = document.querySelector('#duration');
 const frameBadge = document.querySelector('#frameBadge span');
 const fileName = document.querySelector('#fileName');
 const exportButton = document.querySelector('#exportButton');
-const displacementChart = document.querySelector('#displacementChart');
-const angleChart = document.querySelector('#angleChart');
-const displacementValue = document.querySelector('#displacementValue');
-const angleValue = document.querySelector('#angleValue');
 const pointingStatus = document.querySelector('#pointingStatus');
 const frameControls = [playButton, document.querySelector('#previousFrame'), document.querySelector('#nextFrame')];
 const setStartButton = document.querySelector('#setStartButton');
@@ -37,6 +33,17 @@ const deleteProjectButton = document.querySelector('#deleteProjectButton');
 const exportActiveVideoButton = document.querySelector('#exportActiveVideoButton');
 const exportAllVideosButton = document.querySelector('#exportAllVideosButton');
 const exportProgress = document.querySelector('#exportProgress');
+const shareButton = document.querySelector('#shareButton');
+const shareDialog = document.querySelector('#shareDialog');
+const shareDialogClose = document.querySelector('#shareDialogClose');
+
+shareButton.addEventListener('click', () => shareDialog.showModal());
+shareDialogClose.addEventListener('click', () => shareDialog.close());
+shareDialog.addEventListener('click', (event) => {
+  const bounds = shareDialog.getBoundingClientRect();
+  const isOutside = event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom;
+  if (isOutside) shareDialog.close();
+});
 
 let objectUrl = null;
 let activeLandmark = 'joint';
@@ -333,53 +340,6 @@ function drawLine(first, second, bounds, color) {
   context.strokeStyle = color; context.lineWidth = 2; context.stroke();
 }
 
-function calculateMeasures(angle = activeAngle()) {
-  const rows = [...angle.samples.entries()].sort((a, b) => a[0] - b[0]);
-  if (!rows.length) return [];
-  const firstFrame = rows[0][0];
-  const lastFrame = rows.at(-1)[0];
-  const origin = interpolatedPoint('joint', firstFrame, angle);
-  return Array.from({ length: lastFrame - firstFrame + 1 }, (_, index) => {
-    const frame = firstFrame + index;
-    const sample = interpolatedSample(frame, angle);
-    const displacementX = origin && sample.joint ? (sample.joint.x - origin.x) * video.videoWidth : null;
-    const displacementY = origin && sample.joint ? (origin.y - sample.joint.y) * video.videoHeight : null;
-    const displacement = displacementX === null || displacementY === null ? null : Math.hypot(displacementX, displacementY);
-    const angleValueForFrame = calculateAngle(sample);
-    return { frame, time: frameTime(frame), displacementX, displacementY, displacement, angle: angleValueForFrame };
-  });
-}
-
-function renderChart(element, values, color, unit) {
-  const valid = values.filter((item) => item.value !== null);
-  element.innerHTML = '';
-  if (!valid.length) { element.innerHTML = '<div class="chart-empty">Aucune mesure disponible</div>'; return; }
-  const max = Math.max(...valid.map((item) => item.value), 1);
-  const min = Math.min(...valid.map((item) => item.value), 0);
-  const range = max - min || 1;
-  const width = 500; const height = 150; const padding = 6;
-  const points = valid.map((item, index) => `${padding + (index / Math.max(valid.length - 1, 1)) * (width - padding * 2)},${height - padding - ((item.value - min) / range) * (height - padding * 2)}`).join(' ');
-  const circles = valid.map((item, index) => { const x = padding + (index / Math.max(valid.length - 1, 1)) * (width - padding * 2); const y = height - padding - ((item.value - min) / range) * (height - padding * 2); return `<circle cx="${x}" cy="${y}" r="3" fill="${color}"/>`; }).join('');
-  element.innerHTML = `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-label="Courbe ${unit}"><polyline points="${points}" fill="none" stroke="${color}" stroke-width="2.5" vector-effect="non-scaling-stroke"/>${circles}</svg>`;
-}
-
-function renderDisplacementChart(measures) {
-  const series = [
-    { values: measures.map((item) => item.displacementX), color: colors.proximal, label: 'X' },
-    { values: measures.map((item) => item.displacementY), color: colors.distal, label: 'Y' },
-  ];
-  const valid = series.flatMap((item) => item.values).filter((value) => value !== null);
-  displacementChart.innerHTML = '';
-  if (!valid.length) { displacementChart.innerHTML = '<div class="chart-empty">Les positions pointées apparaîtront ici</div>'; return; }
-  const max = Math.max(...valid, 1); const min = Math.min(...valid, -1); const range = max - min || 1;
-  const width = 500; const height = 150; const padding = 6;
-  const lines = series.map((item) => {
-    const points = item.values.map((value, index) => value === null ? null : `${padding + (index / Math.max(item.values.length - 1, 1)) * (width - padding * 2)},${height - padding - ((value - min) / range) * (height - padding * 2)}`).filter(Boolean).join(' ');
-    return `<polyline points="${points}" fill="none" stroke="${item.color}" stroke-width="2.5" vector-effect="non-scaling-stroke"/>`;
-  }).join('');
-  displacementChart.innerHTML = `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-label="Courbes des déplacements X et Y">${lines}</svg>`;
-}
-
 function openProjectDatabase() {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open('fighttrack-local', 1);
@@ -517,14 +477,6 @@ function renderTimelineAngleSegments() {
 }
 
 function updateResults() {
-  const measures = calculateMeasures();
-  renderDisplacementChart(measures);
-  renderChart(angleChart, measures.map((item) => ({ value: item.angle })), colors.joint, 'angle');
-  const latest = measures.at(-1);
-  displacementValue.textContent = latest?.displacementX === null || latest?.displacementX === undefined ? 'X -- · Y --' : `X ${latest.displacementX.toFixed(1)} · Y ${latest.displacementY.toFixed(1)} px`;
-  angleValue.textContent = latest?.angle === null || latest?.angle === undefined ? '-- °' : `${latest.angle.toFixed(1)} °`;
-  document.querySelector('#metricsResults').style.display = 'flex';
-  document.querySelector('#metricsCharts').style.display = 'grid';
   const hasAnySamples = angles.some((item) => item.samples.size > 0);
   exportButton.disabled = !hasAnySamples;
   const hasVideoMeasures = Boolean(video.videoWidth && hasAnySamples);
@@ -674,17 +626,23 @@ canvas.addEventListener('pointerdown', (event) => {
   requestAnimationFrame(drawOverlay);
   updateResults(); scheduleAutosave();
 });
-function csvValue(value, digits = 2) { return value === null || value === undefined ? '' : value.toFixed(digits).replace('.', ','); }
+function csvValue(value, digits = 2) { return value === null || value === undefined ? '' : Number(value).toFixed(digits).replace('.', ','); }
+function pixelCoordinate(point, axis) {
+  if (!point) return null;
+  return point[axis] * (axis === 'x' ? video.videoWidth : video.videoHeight);
+}
 
 function createCsvExport() {
-  const lines = ['projet;angle;frame;temps_s;deplacement_x_px;deplacement_y_px;deplacement_total_px;angle_deg'];
-  angles.forEach((angle) => calculateMeasures(angle).forEach((row) => lines.push([
-    projectName.value.trim(), angle.name, row.frame, row.time.toFixed(6).replace('.', ','),
-    csvValue(row.displacementX), csvValue(row.displacementY), csvValue(row.displacement), csvValue(row.angle),
+  const lines = ['projet;angle;frame;temps_s;proximal_x_px;proximal_y_px;sommet_x_px;sommet_y_px;distal_x_px;distal_y_px'];
+  angles.forEach((angle) => [...angle.samples.entries()].sort((a, b) => a[0] - b[0]).forEach(([frame, sample]) => lines.push([
+    projectName.value.trim(), angle.name, frame, frameTime(frame).toFixed(6).replace('.', ','),
+    csvValue(pixelCoordinate(sample.proximal, 'x')), csvValue(pixelCoordinate(sample.proximal, 'y')),
+    csvValue(pixelCoordinate(sample.joint, 'x')), csvValue(pixelCoordinate(sample.joint, 'y')),
+    csvValue(pixelCoordinate(sample.distal, 'x')), csvValue(pixelCoordinate(sample.distal, 'y')),
   ].map((value) => `"${String(value).replace(/"/g, '""')}"`).join(';'))));
   return {
     blob: new Blob([`\ufeff${lines.join('\n')}`], { type: 'text/csv;charset=utf-8' }),
-    name: `${safeFileName(projectName.value)}-mesures.csv`,
+    name: `${safeFileName(projectName.value)}-pointages.csv`,
   };
 }
 
