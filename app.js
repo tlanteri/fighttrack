@@ -3,6 +3,7 @@ const video = document.querySelector('#video');
 const stage = document.querySelector('#videoStage');
 const canvas = document.querySelector('#overlayCanvas');
 const context = canvas.getContext('2d');
+const markerLayer = document.querySelector('#markerLayer');
 const emptyState = document.querySelector('#emptyState');
 const timeline = document.querySelector('#timeline');
 const playButton = document.querySelector('#playButton');
@@ -33,13 +34,9 @@ const deleteProjectButton = document.querySelector('#deleteProjectButton');
 const exportActiveVideoButton = document.querySelector('#exportActiveVideoButton');
 const exportAllVideosButton = document.querySelector('#exportAllVideosButton');
 const exportProgress = document.querySelector('#exportProgress');
-const athleteSelect = document.querySelector('#athleteSelect');
-const detectCurrentButton = document.querySelector('#detectCurrentButton');
-const trackSequenceButton = document.querySelector('#trackSequenceButton');
-const trackingStatus = document.querySelector('#trackingStatus');
 
 let objectUrl = null;
-let activeLandmark = 'proximal';
+let activeLandmark = 'joint';
 let fps = 120;
 let speedIndex = 0;
 let selectionStart = null;
@@ -49,10 +46,6 @@ let restoredVideoMetadata = null;
 let saveTimer = null;
 let isRestoring = false;
 let isExporting = false;
-let poseLandmarker = null;
-let poseLoadingPromise = null;
-let trackingCancelled = false;
-let isAutoTracking = false;
 const speeds = [1, 0.5, 0.25, 2];
 const jointSelect = document.querySelector('#jointSelect');
 const angles = [{ id: 1, name: jointSelect.value, joint: jointSelect.value, samples: new Map() }];
@@ -97,110 +90,6 @@ function updateLandmarkLabels() {
   document.querySelector('#jointLabel').textContent = labels[1];
   document.querySelector('#distalLabel').textContent = labels[2];
   pointingStatus.textContent = `Prêt à pointer ${landmarkNames[activeLandmark].toLowerCase()} sur l’image actuelle.`;
-}
-
-function posePoint(landmarks, index) {
-  const point = landmarks[index];
-  if (!point) return null;
-  return { x: point.x, y: point.y, confidence: Math.min(point.visibility ?? 1, point.presence ?? 1) };
-}
-
-function averagePosePoints(...points) {
-  const valid = points.filter(Boolean); if (!valid.length) return null;
-  return { x: valid.reduce((sum, point) => sum + point.x, 0) / valid.length, y: valid.reduce((sum, point) => sum + point.y, 0) / valid.length, confidence: Math.min(...valid.map((point) => point.confidence ?? 1)) };
-}
-
-function interpolatePosePoints(first, second, ratio) {
-  if (!first || !second) return null;
-  return { x: first.x + (second.x - first.x) * ratio, y: first.y + (second.y - first.y) * ratio, confidence: Math.min(first.confidence ?? 1, second.confidence ?? 1) };
-}
-
-function posePointsForJoint(landmarks, jointName) {
-  const right = jointName.endsWith('droite');
-  const shoulder = posePoint(landmarks, right ? 12 : 11); const elbow = posePoint(landmarks, right ? 14 : 13);
-  const wrist = posePoint(landmarks, right ? 16 : 15); const hand = posePoint(landmarks, right ? 20 : 19);
-  const hip = posePoint(landmarks, right ? 24 : 23); const knee = posePoint(landmarks, right ? 26 : 25);
-  const ankle = posePoint(landmarks, right ? 28 : 27); const foot = posePoint(landmarks, right ? 32 : 31);
-  const shoulderMid = averagePosePoints(posePoint(landmarks, 11), posePoint(landmarks, 12));
-  const hipMid = averagePosePoints(posePoint(landmarks, 23), posePoint(landmarks, 24));
-  const kneeMid = averagePosePoints(posePoint(landmarks, 25), posePoint(landmarks, 26));
-  const head = averagePosePoints(posePoint(landmarks, 7), posePoint(landmarks, 8), posePoint(landmarks, 0));
-  const thoracic = interpolatePosePoints(shoulderMid, hipMid, .38); const lumbar = interpolatePosePoints(shoulderMid, hipMid, .72);
-  const mappings = {
-    'Épaule droite': [hip, shoulder, elbow], 'Épaule gauche': [hip, shoulder, elbow],
-    'Coude droit': [shoulder, elbow, wrist], 'Coude gauche': [shoulder, elbow, wrist],
-    'Poignet droit': [elbow, wrist, hand], 'Poignet gauche': [elbow, wrist, hand],
-    'Hanche droite': [shoulder, hip, knee], 'Hanche gauche': [shoulder, hip, knee],
-    'Genou droit': [hip, knee, ankle], 'Genou gauche': [hip, knee, ankle],
-    'Cheville droite': [knee, ankle, foot], 'Cheville gauche': [knee, ankle, foot],
-    'Cou': [head, shoulderMid, thoracic], 'Rachis thoracique': [shoulderMid, thoracic, lumbar],
-    'Rachis lombaire': [thoracic, lumbar, hipMid], 'Bassin': [lumbar, hipMid, kneeMid],
-  };
-  return mappings[jointName] || null;
-}
-
-async function getPoseLandmarker() {
-  if (poseLandmarker) return poseLandmarker;
-  if (poseLoadingPromise) return poseLoadingPromise;
-  poseLoadingPromise = (async () => {
-    if (!window.Vision) throw new Error('Moteur MediaPipe introuvable');
-    trackingStatus.textContent = 'Initialisation du modèle local…';
-    const fileset = await Vision.FilesetResolver.forVisionTasks('assets/mediapipe/package/wasm');
-    const common = { runningMode: 'IMAGE', numPoses: 2, minPoseDetectionConfidence: .45, minPosePresenceConfidence: .45, minTrackingConfidence: .45 };
-    try {
-      poseLandmarker = await Vision.PoseLandmarker.createFromOptions(fileset, { ...common, baseOptions: { modelAssetPath: 'assets/mediapipe/pose_landmarker_full.task', delegate: 'GPU' } });
-    } catch (error) {
-      poseLandmarker = await Vision.PoseLandmarker.createFromOptions(fileset, { ...common, baseOptions: { modelAssetPath: 'assets/mediapipe/pose_landmarker_full.task', delegate: 'CPU' } });
-    }
-    return poseLandmarker;
-  })();
-  try { return await poseLoadingPromise; } finally { poseLoadingPromise = null; }
-}
-
-function applyAutomaticPose(landmarks, angle, frame) {
-  const jointName = angle.joint || jointSelect.value; const points = posePointsForJoint(landmarks, jointName);
-  if (!points || points.some((point) => !point)) return false;
-  const sample = angle.samples.get(frame) || {}; sample._source ||= {}; sample._confidence ||= {};
-  ['proximal', 'joint', 'distal'].forEach((landmark, index) => {
-    if (sample._source[landmark] === 'manual') return;
-    sample[landmark] = { x: points[index].x, y: points[index].y };
-    sample._source[landmark] = 'automatic'; sample._confidence[landmark] = points[index].confidence;
-  });
-  angle.samples.set(frame, sample);
-  return { confidence: Math.min(...points.map((point) => point.confidence ?? 1)), estimated: ['Cou', 'Rachis thoracique', 'Rachis lombaire', 'Bassin'].includes(jointName) };
-}
-
-async function detectPoseOnCurrentFrame(angle = activeAngle()) {
-  if (!video.videoWidth) return false;
-  const detector = await getPoseLandmarker(); const result = detector.detect(video);
-  const landmarks = result.landmarks?.[Number(athleteSelect.value)];
-  if (!landmarks) { trackingStatus.textContent = `Athlète ${Number(athleteSelect.value) + 1} non détecté sur cette image.`; return false; }
-  const applied = applyAutomaticPose(landmarks, angle, frameNumber());
-  trackingStatus.textContent = applied ? `${angle.joint || jointSelect.value} ${applied.estimated ? 'estimé' : 'détecté'} · confiance ${(applied.confidence * 100).toFixed(0)} % · vérification requise.` : 'Cette articulation ne peut pas être estimée sur cette image.';
-  updateResults(); drawOverlay(); scheduleAutosave(); return applied;
-}
-
-async function trackActiveSequence() {
-  if (isAutoTracking) { trackingCancelled = true; return; }
-  isAutoTracking = true; trackingCancelled = false; video.pause(); detectCurrentButton.disabled = true;
-  trackSequenceButton.textContent = 'Arrêter'; trackSequenceButton.classList.add('tracking');
-  const angle = activeAngle(); const start = selectionStart ?? 0; const end = selectionEnd ?? Math.floor(video.duration * fps);
-  const step = Math.max(1, Math.round(fps / 30)); let detected = 0; let attempted = 0;
-  try {
-    const detector = await getPoseLandmarker();
-    for (let frame = start; frame <= end && !trackingCancelled; frame += step) {
-      await waitForSeek(Math.min(video.duration - .001, frameTime(frame)));
-      const landmarks = detector.detect(video).landmarks?.[Number(athleteSelect.value)];
-      attempted += 1; if (landmarks && applyAutomaticPose(landmarks, angle, frame)) detected += 1;
-      const progress = ((frame - start) / Math.max(1, end - start)) * 100;
-      trackingStatus.textContent = `Analyse de ${angle.joint || jointSelect.value} · ${progress.toFixed(0)} % · ${detected}/${attempted} détections`;
-      if (attempted % 3 === 0) { updateResults(); drawOverlay(); await new Promise((resolve) => setTimeout(resolve, 0)); }
-    }
-    const estimated = ['Cou', 'Rachis thoracique', 'Rachis lombaire', 'Bassin'].includes(angle.joint || jointSelect.value);
-    trackingStatus.textContent = trackingCancelled ? `Suivi arrêté · ${detected} images clés conservées.` : `Suivi terminé · ${detected} images clés ${estimated ? 'estimées' : 'automatiques'} à vérifier.`;
-    updateResults(); drawOverlay(); scheduleAutosave();
-  } catch (error) { trackingStatus.textContent = `Suivi indisponible : ${error.message}`; }
-  finally { isAutoTracking = false; trackSequenceButton.textContent = 'Suivre la séquence'; trackSequenceButton.classList.remove('tracking'); detectCurrentButton.disabled = false; }
 }
 
 function formatTime(seconds) {
@@ -362,6 +251,7 @@ function videoBounds() {
 }
 
 function drawOverlay() {
+  markerLayer.innerHTML = '';
   if (!video.videoWidth) return;
   const width = stage.clientWidth;
   const height = stage.clientHeight;
@@ -379,9 +269,17 @@ function drawOverlay() {
   points.forEach(([name, point]) => {
     const x = bounds.left + point.x * bounds.width;
     const y = bounds.top + point.y * bounds.height;
-    context.beginPath(); context.arc(x, y, name === 'joint' ? 7 : 5, 0, Math.PI * 2);
+    context.beginPath(); context.arc(x, y, name === 'joint' ? 11 : 9, 0, Math.PI * 2);
+    context.fillStyle = 'rgba(0, 0, 0, .45)'; context.fill();
+    context.beginPath(); context.arc(x, y, name === 'joint' ? 8 : 6, 0, Math.PI * 2);
     context.fillStyle = colors[name]; context.fill();
-    context.lineWidth = 2; context.strokeStyle = '#ffffff'; context.stroke();
+    context.lineWidth = 3; context.strokeStyle = '#ffffff'; context.stroke();
+    const marker = document.createElement('span');
+    marker.className = `video-marker ${name}${name === activeLandmark ? ' selected' : ''}`;
+    marker.style.left = `${x}px`;
+    marker.style.top = `${y}px`;
+    marker.title = landmarkNames[name];
+    markerLayer.append(marker);
   });
 }
 
@@ -539,8 +437,8 @@ function updateResults() {
   const latest = measures.at(-1);
   displacementValue.textContent = latest?.displacementX === null || latest?.displacementX === undefined ? 'X -- · Y --' : `X ${latest.displacementX.toFixed(1)} · Y ${latest.displacementY.toFixed(1)} px`;
   angleValue.textContent = latest?.angle === null || latest?.angle === undefined ? '-- °' : `${latest.angle.toFixed(1)} °`;
-  document.querySelector('#metricsResults').style.display = measures.length ? 'flex' : 'none';
-  document.querySelector('#metricsCharts').style.display = measures.length ? 'grid' : 'none';
+  document.querySelector('#metricsResults').style.display = 'flex';
+  document.querySelector('#metricsCharts').style.display = 'grid';
   exportButton.disabled = measures.length === 0 || !video.videoWidth;
   const hasVideoMeasures = Boolean(video.videoWidth && angles.some((item) => item.samples.size));
   exportActiveVideoButton.disabled = !hasVideoMeasures || isExporting;
@@ -580,7 +478,6 @@ function loadVideoFile(file) {
   objectUrl = URL.createObjectURL(file);
   video.src = objectUrl; video.load(); fileName.textContent = file.name;
   frameControls.forEach((control) => { control.disabled = false; });
-  detectCurrentButton.disabled = false; trackSequenceButton.disabled = false;
   setStartButton.disabled = false; setEndButton.disabled = false;
   if (!sameVideo) {
     selectionStart = null; selectionEnd = null; selectionLabel.textContent = 'Aucune séquence sélectionnée'; reviewButton.disabled = true;
@@ -603,8 +500,9 @@ stage.addEventListener('drop', (event) => {
 video.addEventListener('loadedmetadata', () => {
   stage.classList.add('loaded'); emptyState.hidden = true;
   document.querySelector('#videoResolution').textContent = `${video.videoWidth} × ${video.videoHeight}`;
-  resizeCanvas(); updateTransport();
+  requestAnimationFrame(() => { resizeCanvas(); updateTransport(); });
 });
+new ResizeObserver(resizeCanvas).observe(stage);
 video.addEventListener('timeupdate', updateTransport);
 video.addEventListener('play', () => { playButton.textContent = 'Ⅱ'; });
 video.addEventListener('pause', () => { playButton.textContent = '▶'; });
@@ -625,18 +523,19 @@ setStartButton.addEventListener('click', () => { selectionStart = frameNumber();
 setEndButton.addEventListener('click', () => { const current = frameNumber(); if (selectionStart === null) selectionStart = 0; selectionEnd = Math.max(selectionStart + 1, current); updateSelectionLabel(); scheduleAutosave(); });
 reviewButton.addEventListener('click', () => { if (selectionStart === null || selectionEnd === null) return; seekToFrame(selectionStart); video.play(); });
 addAngleButton.addEventListener('click', () => { const id = Math.max(...angles.map((angle) => angle.id)) + 1; angles.push({ id, name: nextAngleName(), joint: jointSelect.value, samples: new Map() }); activeAngleId = id; renderAngles(); updateResults(); scheduleAutosave(); });
-jointSelect.addEventListener('change', () => { updateLandmarkLabels(); const angle = activeAngle(); if (angle.samples.size === 0) { angle.joint = jointSelect.value; angle.name = nextAngleName(); renderAngles(); } scheduleAutosave(); });
+jointSelect.addEventListener('change', () => { updateLandmarkLabels(); const angle = activeAngle(); if (angle.samples.size === 0) { angle.joint = jointSelect.value; angle.name = nextAngleName(); } updateResults(); drawOverlay(); scheduleAutosave(); });
 projectName.addEventListener('input', scheduleAutosave);
-detectCurrentButton.addEventListener('click', () => detectPoseOnCurrentFrame());
-trackSequenceButton.addEventListener('click', trackActiveSequence);
 document.querySelectorAll('.landmark').forEach((button) => button.addEventListener('click', () => {
   activeLandmark = button.dataset.landmark;
   document.querySelectorAll('.landmark').forEach((item) => item.classList.toggle('active', item === button));
   pointingStatus.textContent = `Prêt à pointer ${landmarkNames[activeLandmark].toLowerCase()} sur l’image actuelle.`;
+  drawOverlay();
 }));
 window.addEventListener('keydown', (event) => { if (event.target.matches('input, select')) return; const selected = { '1': 'proximal', '2': 'joint', '3': 'distal' }[event.key]; if (selected) document.querySelector(`[data-landmark="${selected}"]`).click(); if (event.code === 'Space') { event.preventDefault(); playButton.click(); } if (event.key === 'ArrowLeft') seekToFrame(frameNumber() - 1); if (event.key === 'ArrowRight') seekToFrame(frameNumber() + 1); });
-canvas.addEventListener('click', (event) => {
+canvas.addEventListener('pointerdown', (event) => {
+  event.preventDefault();
   if (!video.videoWidth) return;
+  video.pause();
   const bounds = videoBounds();
   const stageBounds = stage.getBoundingClientRect();
   const x = (event.clientX - stageBounds.left - bounds.left) / bounds.width;
@@ -648,7 +547,9 @@ canvas.addEventListener('click', (event) => {
   sample._source ||= {}; sample._source[activeLandmark] = 'manual';
   activeSamples().set(frame, sample);
   pointingStatus.textContent = `Frame clé enregistrée : ${landmarkNames[activeLandmark]} à l’image ${frame.toString().padStart(4, '0')}.`;
-  updateResults(); drawOverlay(); scheduleAutosave();
+  drawOverlay();
+  requestAnimationFrame(drawOverlay);
+  updateResults(); scheduleAutosave();
 });
 function csvValue(value, digits = 2) { return value === null || value === undefined ? '' : value.toFixed(digits).replace('.', ','); }
 

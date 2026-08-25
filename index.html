@@ -82,18 +82,11 @@
           <div class="panel-heading compact"><div><span class="section-index">02</span><h2>Pointage</h2></div></div>
           <p class="helper" id="pointingHelp">Pointez quelques images clés. Les positions intermédiaires seront interpolées automatiquement.</p>
           <div class="landmark-list" role="group" aria-label="Repères anatomiques">
-            <button class="landmark active" data-landmark="proximal"><span class="landmark-number">1</span><span><strong>Repère proximal</strong><small id="proximalLabel">Hanche droite</small></span><kbd>1</kbd></button>
-            <button class="landmark" data-landmark="joint"><span class="landmark-number coral">2</span><span><strong>Articulation ciblée</strong><small id="jointLabel">Genou droit</small></span><kbd>2</kbd></button>
+            <button class="landmark" data-landmark="proximal"><span class="landmark-number">1</span><span><strong>Repère proximal</strong><small id="proximalLabel">Hanche droite</small></span><kbd>1</kbd></button>
+            <button class="landmark active" data-landmark="joint"><span class="landmark-number coral">2</span><span><strong>Articulation ciblée</strong><small id="jointLabel">Genou droit</small></span><kbd>2</kbd></button>
             <button class="landmark" data-landmark="distal"><span class="landmark-number lime">3</span><span><strong>Repère distal</strong><small id="distalLabel">Cheville droite</small></span><kbd>3</kbd></button>
           </div>
-          <div class="auto-tracking-panel">
-            <div class="auto-tracking-heading"><strong>Suivi automatique assisté</strong><span>LOCAL</span></div>
-            <label for="athleteSelect">Personne suivie</label>
-            <div class="select-wrap"><select id="athleteSelect"><option value="0">Athlète détecté 1</option><option value="1">Athlète détecté 2</option></select></div>
-            <div class="auto-tracking-actions"><button id="detectCurrentButton" type="button" disabled>Détecter l’image</button><button id="trackSequenceButton" type="button" disabled>Suivre la séquence</button></div>
-            <small id="trackingStatus" role="status">Chargez une vidéo pour activer le suivi.</small>
-          </div>
-          <div class="panel-footnote"><span class="click-icon">⌖</span><span id="pointingStatus">Prêt à pointer le segment proximal sur l’image actuelle.</span><small class="interpolation-note">Interpolation linéaire activée</small></div>
+          <div class="panel-footnote"><span class="click-icon">⌖</span><span id="pointingStatus">Prêt à pointer l’articulation ciblée sur l’image actuelle.</span><small class="interpolation-note">Interpolation linéaire activée</small></div>
         </aside>
 
         <section class="analysis-area">
@@ -106,6 +99,7 @@
               <div class="empty-state" id="emptyState"><div class="empty-cross">+</div><strong>Déposez votre vidéo ici</strong><span>ou utilisez le bouton « Charger une vidéo »</span></div>
               <video id="video" preload="metadata" playsinline></video>
               <canvas id="overlayCanvas"></canvas>
+              <div class="marker-layer" id="markerLayer" aria-hidden="true"></div>
               <div class="axis-marker" aria-label="Repère du plan image"><span class="axis-y">Y ↑</span><span class="axis-x">X →</span></div>
               <div class="angle-overlay" id="angleOverlay" hidden>ANGLE <span>--°</span></div>
               <div class="frame-badge" id="frameBadge">FRAME <span>0000</span></div>
@@ -150,9 +144,7 @@
     </main>
     <footer><span>FightTrack </span><span>Conçu par T. LANTERI · Université Côte d’Azur</span></footer>
   </div>
-  <script src="assets/mediapipe/package/vision_bundle.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
-
 
