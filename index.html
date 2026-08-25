@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0b1f33">
+  <title>FightTrack | Pointage vidéo</title>
+  <link rel="icon" type="image/png" href="assets/images/Mini-logo_Fight Track.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand-lockup">
+        <img class="lamhess-logo" src="assets/images/logo-lamhess-blanc.png" alt="LAMHESS">
+        <span class="brand-divider" aria-hidden="true"></span>
+        <img class="uca-logo" src="assets/images/UCAlogoQlarge-inverse.png" alt="Université Côte d’Azur">
+      </div>
+      <div class="topbar-actions">
+        <img class="fighttrack-logo" src="assets/images/Logo_Fight Track.png" alt="FightTrack">
+      </div>
+      <span class="privacy-note"><span class="status-dot"></span> Données locales</span>
+    </header>
+
+    <main>
+      <section class="intro-row">
+        <div>
+          <p class="eyebrow">ANALYSE BIOMÉCANIQUE </p>
+          <h1>Pointer le mouvement.<br><em>Comprendre</em> la trajectoire.</h1>
+        </div>
+        <div class="intro-copy">
+          <p>Une station de pointage manuelle pour quantifier le déplacement et l’angle articulaire, image par image.</p>
+          <label class="button button-primary upload-button" for="videoInput"><span class="icon">+</span> Charger une vidéo</label>
+          <input id="videoInput" type="file" accept="video/*" hidden>
+        </div>
+      </section>
+
+      <section class="workspace" id="analyse" aria-label="Espace d'analyse">
+        <aside class="control-panel">
+          <div class="panel-heading">
+            <div><span class="section-index">01</span><h2>Protocole</h2></div>
+            <span class="live-tag">LIVE</span>
+          </div>
+          <div class="field-group">
+            <label for="projectName">Nom de l'analyse</label>
+            <input id="projectName" type="text" value="Analyse sans titre" placeholder="Nom de l'analyse">
+          </div>
+          <div class="field-group">
+            <label>Articulation ciblée</label>
+            <div class="select-wrap">
+              <select id="jointSelect">
+                <optgroup label="Membre supérieur">
+                  <option>Épaule droite</option>
+                  <option>Épaule gauche</option>
+                  <option>Coude droit</option>
+                  <option>Coude gauche</option>
+                  <option>Poignet droit</option>
+                  <option>Poignet gauche</option>
+                </optgroup>
+                <optgroup label="Membre inférieur">
+                  <option>Hanche droite</option>
+                  <option>Hanche gauche</option>
+                  <option selected>Genou droit</option>
+                  <option>Genou gauche</option>
+                  <option>Cheville droite</option>
+                  <option>Cheville gauche</option>
+                </optgroup>
+                <optgroup label="Axe tête-tronc">
+                  <option>Cou</option>
+                  <option>Rachis thoracique</option>
+                  <option>Rachis lombaire</option>
+                  <option>Bassin</option>
+                </optgroup>
+                <option>Personnalisée</option>
+              </select>
+            </div>
+          </div>
+          <div class="divider"></div>
+          <div class="panel-heading compact"><div><span class="section-index">02</span><h2>Pointage</h2></div></div>
+          <p class="helper" id="pointingHelp">Pointez quelques images clés. Les positions intermédiaires seront interpolées automatiquement.</p>
+          <div class="landmark-list" role="group" aria-label="Repères anatomiques">
+            <button class="landmark active" data-landmark="proximal"><span class="landmark-number">1</span><span><strong>Repère proximal</strong><small id="proximalLabel">Hanche droite</small></span><kbd>1</kbd></button>
+            <button class="landmark" data-landmark="joint"><span class="landmark-number coral">2</span><span><strong>Articulation ciblée</strong><small id="jointLabel">Genou droit</small></span><kbd>2</kbd></button>
+            <button class="landmark" data-landmark="distal"><span class="landmark-number lime">3</span><span><strong>Repère distal</strong><small id="distalLabel">Cheville droite</small></span><kbd>3</kbd></button>
+          </div>
+          <div class="auto-tracking-panel">
+            <div class="auto-tracking-heading"><strong>Suivi automatique assisté</strong><span>LOCAL</span></div>
+            <label for="athleteSelect">Personne suivie</label>
+            <div class="select-wrap"><select id="athleteSelect"><option value="0">Athlète détecté 1</option><option value="1">Athlète détecté 2</option></select></div>
+            <div class="auto-tracking-actions"><button id="detectCurrentButton" type="button" disabled>Détecter l’image</button><button id="trackSequenceButton" type="button" disabled>Suivre la séquence</button></div>
+            <small id="trackingStatus" role="status">Chargez une vidéo pour activer le suivi.</small>
+          </div>
+          <div class="panel-footnote"><span class="click-icon">⌖</span><span id="pointingStatus">Prêt à pointer le segment proximal sur l’image actuelle.</span><small class="interpolation-note">Interpolation linéaire activée</small></div>
+        </aside>
+
+        <section class="analysis-area">
+          <div class="video-card">
+            <div class="video-toolbar">
+              <div class="video-file"><span class="video-icon">▣</span><span id="fileName">Aucune vidéo chargée</span></div>
+              <div class="video-meta"><span id="videoResolution">-- × --</span><span class="meta-separator"></span><span id="videoFps">fps auto</span></div>
+            </div>
+            <div class="video-stage" id="videoStage">
+              <div class="empty-state" id="emptyState"><div class="empty-cross">+</div><strong>Déposez votre vidéo ici</strong><span>ou utilisez le bouton « Charger une vidéo »</span></div>
+              <video id="video" preload="metadata" playsinline></video>
+              <canvas id="overlayCanvas"></canvas>
+              <div class="axis-marker" aria-label="Repère du plan image"><span class="axis-y">Y ↑</span><span class="axis-x">X →</span></div>
+              <div class="angle-overlay" id="angleOverlay" hidden>ANGLE <span>--°</span></div>
+              <div class="frame-badge" id="frameBadge">FRAME <span>0000</span></div>
+            </div>
+            <div class="transport">
+              <button class="transport-button" id="previousFrame" title="Image précédente" disabled>|‹</button>
+              <button class="play-button" id="playButton" title="Lire / mettre en pause" disabled>▶</button>
+              <button class="transport-button" id="nextFrame" title="Image suivante" disabled>›|</button>
+              <div class="timeline-wrap"><input id="timeline" type="range" min="0" max="1000" value="0" aria-label="Position dans la vidéo"><div class="timecodes"><span id="currentTime">00:00.000</span><span id="duration">00:00.000</span></div></div>
+              <button class="transport-button speed-button" id="speedButton" title="Changer la vitesse">1×</button>
+            </div>
+            <div class="selection-toolbar"><span class="selection-label" id="selectionLabel">Aucune séquence sélectionnée</span><button class="selection-button" id="setStartButton" disabled>Début</button><button class="selection-button" id="setEndButton" disabled>Fin</button><button class="selection-button review-button" id="reviewButton" disabled>▶ Revoir la séquence</button></div>
+            <section class="angles-panel" aria-label="Angles articulaires enregistrés">
+              <div class="angles-heading"><div><span class="section-index">03</span><h2>Angles articulaires</h2></div><button class="add-angle-button" id="addAngleButton" disabled>+ Ajouter un angle</button></div>
+              <div class="angles-list" id="anglesList"></div>
+              <div class="final-export">
+                <p class="export-section-title">Exports vidéo</p>
+                <div class="export-button-row"><button class="selection-button" id="exportActiveVideoButton" disabled>Vidéo de l’angle actif</button><button class="review-button selection-button" id="exportAllVideosButton" disabled>Exporter toutes les vidéos</button></div>
+                <span id="exportProgress" role="status"></span>
+                <div class="data-export-block">
+                  <p class="export-section-title">Données et sauvegarde</p>
+                  <div class="export-button-row">
+                    <button class="data-action primary" id="exportButton" disabled title="Exporter toutes les mesures au format CSV"><span>↓</span> Exporter CSV</button>
+                    <button class="data-action" id="exportProjectButton" type="button">Exporter le projet</button>
+                    <label class="data-action" for="importProjectInput">Importer un projet</label>
+                    <input id="importProjectInput" type="file" accept=".json,.fighttrack" hidden>
+                    <button class="data-action danger" id="deleteProjectButton" type="button">Effacer les données</button>
+                  </div>
+                  <small class="save-status" id="saveStatus">Sauvegarde locale prête</small>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <div class="metrics-header" id="metricsResults"><div><p class="eyebrow">RÉSULTATS <span>•</span> TEMPS RÉEL</p><h2>Mesures cinématiques</h2></div><div class="metric-pills"><span><i class="swatch cyan"></i>Déplacement</span><span><i class="swatch coral"></i>Angle</span></div></div>
+          <div class="charts-grid" id="metricsCharts">
+            <article class="chart-card"><div class="chart-title"><div><span class="chart-number cyan-text">01</span><h3>Déplacement X / Y</h3></div><span class="unit-label">px</span></div><div class="chart-legend"><span><i class="swatch cyan"></i>X horizontal</span><span><i class="swatch lime"></i>Y vertical</span></div><div class="chart" id="displacementChart"><div class="chart-empty">Les positions pointées apparaîtront ici</div></div><div class="chart-footer"><span>Y positif vers le haut</span><strong id="displacementValue">X -- · Y --</strong></div></article>
+            <article class="chart-card"><div class="chart-title"><div><span class="chart-number coral-text">02</span><h3>Angle articulaire</h3></div><span class="unit-label">degrés</span></div><div class="chart" id="angleChart"><div class="chart-empty">Pointez les 3 repères pour calculer l’angle</div></div><div class="chart-footer"><span>Angle entre les deux segments</span><strong id="angleValue">-- °</strong></div></article>
+          </div>
+        </section>
+      </section>
+    </main>
+    <footer><span>FightTrack </span><span>Conçu par T. LANTERI · Université Côte d’Azur</span></footer>
+  </div>
+  <script src="assets/mediapipe/package/vision_bundle.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
+
